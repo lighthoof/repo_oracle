@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Parsed Data
+data/
+
+#misc
+test_llm.py
+test.py
+test_issue_page.json
+test_issues.json
+validated_issue_page.json

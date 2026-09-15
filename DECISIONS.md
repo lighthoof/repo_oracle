@@ -1,0 +1,1 @@
+1. Did not use agentic flow for ingestion despite MCP being a requirement as it is not a good use case. Straigthforward data retreival is better suited for that
