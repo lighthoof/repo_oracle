@@ -13,7 +13,11 @@ class Settings(BaseSettings):
     #Model and vector store settings
     openrouter_api_key: SecretStr
     llm_model_name: str = "openrouter/free" 
+    
     embedding_model_name: str 
+    max_tokens: int
+    overlap: int
+    
     vector_db_path: str
     
     #Storage paths

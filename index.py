@@ -1,84 +1,169 @@
 import json
+import os
+import chromadb
+import hashlib
+
 from config import settings
 from pathlib import Path
+from models import Issue, Chunk, RepoFile
+
 from sentence_transformers import SentenceTransformer
 
 model = SentenceTransformer(settings.embedding_model_name)
-tokenizer = model.tokenizer
 
-def load_parsed_data(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+def load_parsed_data(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
 
-def count_tokens(text: str):
-    tokens = model.tokenizer.encode(text, add_special_tokens=True)
-    total_tokens = len(tokens)
-    max_length = model.max_seq_length  # Automatically gets 384 for all-mpnet-base-v2
-
-    return tokens
-
-def chunk_text(text: str, max_tokens: int = 300, overlap: int = 40) -> list[str]:
-    tokens = tokenizer.encode(text, add_special_tokens=False)
+def chunk_text(text: str, max_tokens: int = 250, overlap: int = 40) -> list[str]:
+    tokens = model.tokenizer.backend_tokenizer.encode(text, add_special_tokens=False).ids
     chunks = []
     
     start = 0
     while start < len(tokens):
         end = min(start + max_tokens, len(tokens))
         chunk_tokens = tokens[start:end]
-        chunks.append(tokenizer.decode(chunk_tokens, skip_special_tokens=True))
+
+        chunks.append(
+            model.tokenizer.decode(
+                chunk_tokens, 
+                skip_special_tokens=True
+            )
+        )
+
         if end == len(tokens):
             break
         start += (max_tokens - overlap)
         
     return chunks
 
-def chunk_issue(issue: dict) -> list[dict]:
+def chunk_issue(issue: Issue) -> list[Chunk]:
     chunks = []
-    num = issue.get("number","")
-    title = issue.get("title","")
+    num = issue.number
+    title = issue.title
     header = f"Github issue #{num}: {title}\n"
 
-    body_text = issue.get("body","") or "No description provided"
-    for subtext in chunk_text(body_text, max_tokens=250):
-        chunks.append({
-            "text": f"{header}Description:\n{sub_text}",
-            "metadata": {"type": "issue_body", "issue_number": num, "url": issue.get("html_url")}
-        })
+    body_text = issue.body or "No description provided"
+    for subtext in chunk_text(body_text, settings.max_tokens, settings.overlap):
+        chunks.append(
+            Chunk(
+                text= f"{header}Description:\n{subtext}",
+                metadata= {
+                    "type": "issue_body",
+                    "issue_number": num,
+                    "url": str(issue.html_url) if issue.html_url else ""
+                }
+            )
+        )
 
-    comments = issue.get("comments",[])
+
+    comments = issue.comments
     if comments:
-        comment_str = "\n".join([f"- {c['user']['login']}: {c['body']}" for c in comments])
+        for comment in comments:
+            comment_text = (
+                f"{header}\n"
+                f"Comment by {comment.user.login}:\n"
+                f"{comment.body}"
+            )
 
-        for subtext in chunk_text(comment_str, max_tokens=250):
-            chunks.append({
-                "text": f"{header}Comments:\n{sub_text}",
-                "metadata": {"type": "issue_comments", "issue_number": num, "url": issue.get("html_url")}
-            })
+            for subtext in chunk_text(comment_text, settings.max_tokens, settings.overlap):
+                chunks.append(
+                    Chunk(
+                        text= f"{header}Comments:\n{subtext}",
+                        metadata= {
+                            "type": "issue_comments",
+                            "issue_number": num,
+                            "comment_id": comment.id,
+                            "url": str(issue.html_url) if issue.html_url else ""
+                        }
+                    )
+                )
     
     return chunks
 
-def chunk_readme(file_path: str, content: str) -> list[dict]:
-    """Chunks README.md by sections while enforcing token bounds."""
+def chunk_file(file: RepoFile) -> list[Chunk]:
     chunks = []
-    sections = content.split("\n## ")
+    sections = file.content.split("\n## ")
     
     for idx, sec in enumerate(sections):
         section_text = sec if idx == 0 else f"## {sec}"
         first_line = section_text.split("\n")[0].replace("#", "").strip()
-        header = f"File: {file_path} | Section: {first_line}\n"
+        header = f"File: {file.path} | Section: {first_line}\n"
         
-        for sub_text in chunk_text(section_text, max_tokens=250):
-            chunks.append({
-                "text": f"{header}{sub_text}",
-                "metadata": {"type": "readme", "path": file_path, "section": first_line}
-            })
+        for subtext in chunk_text(section_text, settings.max_tokens, settings.overlap):
+            chunks.append(
+                Chunk(
+                    text= f"{header}{subtext}",
+                    metadata= {
+                        "type": "readme",
+                        "path": file.path,
+                        "section": first_line,
+                        "url": str(file.html_url) if file.html_url else ""
+                    }
+                )
+            )
             
     return chunks
 
-#path = Path("data/parsed/files/README_md.json")
-#text = json.loads(load_parsed_data(path))["content"]
-#chunks = chunk_text(text)
-#tokens = count_tokens(text)
+def generate_chunk_id(chunk: Chunk) -> str:
+    content = json.dumps(
+        {
+            "text": chunk.text,
+            "metadata": chunk.metadata,
+        },
+        sort_keys=True,
+    )
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
-#print(f"Text length: {len(text)}")
-#print(f"Chunks: {len(chunks)}")
-#print(f"Tokens: {len(tokens)}")
+def main():
+    file_path = Path(f"{settings.parsed_data_dir}/files")
+    issue_path = Path(f"{settings.parsed_data_dir}/issues")
+    stored_file_list = os.listdir(file_path)
+    stored_issue_list = os.listdir(issue_path)
+
+    # Load and chunk the data
+    chunks = []
+    for stored_file_name in stored_file_list:
+        stored_file_path = file_path / stored_file_name
+
+        file = load_parsed_data(stored_file_path)
+        validated_file = RepoFile.model_validate(file)
+
+        file_chunks = chunk_file(validated_file)
+        chunks.extend(file_chunks)
+
+    for stored_issue_name in stored_issue_list:
+        stored_issue_path = issue_path / stored_issue_name
+
+        issue = load_parsed_data(stored_issue_path)
+        validated_issue = Issue.model_validate(issue)
+
+        issue_chunks = chunk_issue(validated_issue)
+        chunks.extend(issue_chunks)
+
+    # Prepare embeddings and IDs
+    texts = [chunk.text for chunk in chunks]
+    
+    embeddings = model.encode(texts, normalize_embeddings=True, show_progress_bar=True)
+    chunk_ids = [generate_chunk_id(chunk) for chunk in chunks]
+
+    # Load data into chroma db
+    chroma_client = chromadb.PersistentClient(path=settings.vector_db_path)
+    collection = chroma_client.get_or_create_collection(
+        name="vector_data", 
+        metadata={"hnsw:space": "cosine"},
+    )
+
+    collection.upsert(
+        ids=chunk_ids,
+        documents=[chunk.text for chunk in chunks],
+        embeddings=embeddings.tolist(),
+        metadatas=[chunk.metadata for chunk in chunks],
+    )
+
+    print(f"Chroma collection contains {collection.count()} chunks")
+
+def run_index():
+    main()
+
+if __name__ == "__main__":
+    run_index()

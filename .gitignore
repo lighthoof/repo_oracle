@@ -220,6 +220,9 @@ __marimo__/
 # Parsed Data
 data/
 
+# Chroma DB
+chroma_db/
+
 #misc
 test_llm.py
 test.py

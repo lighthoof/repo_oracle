@@ -45,6 +45,10 @@ class RepoFile(BaseModel):
     html_url: HttpUrl
     content: str
 
+class Chunk(BaseModel):
+    text: str
+    metadata: dict[str, str | int]
+
 class Citation(BaseModel):
     source_type: Literal["issue", "comment", "readme"] = Field(description="Type of source")
     title: str = Field(description="Short description or issue title for display text")
