@@ -11,14 +11,18 @@ class Settings(BaseSettings):
     github_files: list[str]
     
     #Model and vector store settings
-    openrouter_api_key: SecretStr
-    llm_model_name: str = "openrouter/free" 
+    llm_api_key: SecretStr
+    llm_model_name: str
+    llm_base_url: str
     
     embedding_model_name: str 
     max_tokens: int
     overlap: int
     
     vector_db_path: str
+    collection_name: str
+    space_type: str
+    result_limit: int
     
     #Storage paths
     raw_data_dir: Path = Path("data/raw")

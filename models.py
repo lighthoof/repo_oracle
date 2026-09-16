@@ -49,13 +49,11 @@ class Chunk(BaseModel):
     text: str
     metadata: dict[str, str | int]
 
-class Citation(BaseModel):
-    source_type: Literal["issue", "comment", "readme"] = Field(description="Type of source")
-    title: str = Field(description="Short description or issue title for display text")
-    url: HttpUrl = Field(description="Direct web URL to the issue or comment")
+class LLMAnswer(BaseModel):
+    answer: str
+    source_ids: list[int]
+    insufficient_context: bool
 
 class AnswerModel(BaseModel):
     answer: str
-    citations: list[Citation]
-    insufficient_context: bool
-    
+    citations: list[HttpUrl]

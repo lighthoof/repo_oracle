@@ -3,11 +3,11 @@ import os
 import chromadb
 import hashlib
 
-from config import settings
 from pathlib import Path
-from models import Issue, Chunk, RepoFile
-
 from sentence_transformers import SentenceTransformer
+
+from config import settings
+from models import Issue, Chunk, RepoFile
 
 model = SentenceTransformer(settings.embedding_model_name)
 
@@ -73,7 +73,13 @@ def chunk_issue(issue: Issue) -> list[Chunk]:
                             "type": "issue_comments",
                             "issue_number": num,
                             "comment_id": comment.id,
-                            "url": str(issue.html_url) if issue.html_url else ""
+                            "url": (
+                                str(comment.html_url)
+                                if comment.html_url
+                                else str(issue.html_url)
+                                if issue.html_url
+                                else ""
+                            )
                         }
                     )
                 )
@@ -149,8 +155,8 @@ def main():
     # Load data into chroma db
     chroma_client = chromadb.PersistentClient(path=settings.vector_db_path)
     collection = chroma_client.get_or_create_collection(
-        name="vector_data", 
-        metadata={"hnsw:space": "cosine"},
+        name=settings.collection_name, 
+        metadata={"hnsw:space": settings.space_type},
     )
 
     collection.upsert(
@@ -159,8 +165,6 @@ def main():
         embeddings=embeddings.tolist(),
         metadatas=[chunk.metadata for chunk in chunks],
     )
-
-    print(f"Chroma collection contains {collection.count()} chunks")
 
 def run_index():
     main()
