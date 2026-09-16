@@ -57,3 +57,4 @@ class LLMAnswer(BaseModel):
 class AnswerModel(BaseModel):
     answer: str
     citations: list[HttpUrl]
+    insufficient_context: bool

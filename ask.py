@@ -1,11 +1,11 @@
 import argparse
 import chromadb
 import os
-import json
 
-from openai import OpenAI
-from dotenv import load_dotenv
-from pydantic import ValidationError
+from pydantic_ai import Agent
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openrouter import OpenRouterProvider
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 from sentence_transformers import SentenceTransformer
 
 from models import AnswerModel, LLMAnswer
@@ -21,24 +21,14 @@ Rules:
   set insufficient_context to true.
 - If the question contains a false premise that is not supported by the
   retrieved context, do not accept the premise as fact.
-- Return ONLY valid JSON with exactly these fields:
-    {
-      "answer": string,
-      "source_ids": [integer, ...],
-      "insufficient_context": boolean
-    }
+- Return an answer, source_ids, and insufficient_context.
 - source_ids must refer only to SOURCE numbers present in the retrieved context.
 - Do not invent source IDs.
 """
 
-parser = argparse.ArgumentParser()
-parser.add_argument("question")
-args = parser.parse_args()
-
-model = SentenceTransformer(settings.embedding_model_name)
-
-def get_sources_from_db(question: str) -> str:
-    q_embeddings = model.encode(question, normalize_embeddings=True, show_progress_bar=True)
+def get_sources_from_db(question: str) -> list[tuple[str, dict]]:
+    embed_model = SentenceTransformer(settings.embedding_model_name)
+    q_embeddings = embed_model.encode(question, normalize_embeddings=True, show_progress_bar=True)
     chroma_client = chromadb.PersistentClient(path=settings.vector_db_path)
     collection = chroma_client.get_or_create_collection(
         name=settings.collection_name, 
@@ -57,69 +47,38 @@ def get_sources_from_db(question: str) -> str:
                 )
             )
 
-def get_llm_answer(context: str) -> LLMAnswer:
-    llm_client = OpenAI(
-        base_url=settings.llm_base_url,
-        api_key=settings.llm_api_key.get_secret_value(),
+def get_llm_answer(question: str, context: str) -> LLMAnswer:
+    model = OpenAIChatModel(
+        settings.llm_model_name,
+        provider=OpenRouterProvider(api_key=settings.llm_api_key.get_secret_value()),
     )
 
-    validation_error = None
+    agent = Agent(
+        model,
+        output_type=LLMAnswer,
+        system_prompt=SYSTEM_PROMPT,
+        retries=2,
+    )
+    
+    try:
+        result = agent.run_sync(
+            f"""
+                Question:
+                {question}
 
-    for attempt in range(3):
-        if validation_error:
-            retry_instruction = f"""
-            Your previous response failed validation.
-
-            Validation error:
-            {validation_error}
-
-            Return corrected JSON only.
-            """
-        else:
-            retry_instruction = ""
-
-        response = llm_client.chat.completions.create(
-            model=settings.llm_model_name,
-            messages=[
-                {
-                    "role": "system",
-                    "content": SYSTEM_PROMPT,
-                },
-                {
-                    "role": "user",
-                    "content": f"""
-                        Question:
-                        {args.question}
-
-                        Retrieved context:
-                        {context}
-
-                        {retry_instruction}
-                        """,
-                },
-            ],
+                Retrieved context:
+                {context}
+                """
         )
-
-        raw_output = response.choices[0].message.content
-
-        try:
-            data = json.loads(raw_output)
-            return LLMAnswer.model_validate(data)
-
-        except (json.JSONDecodeError, ValidationError) as exc:
-            validation_error = str(exc)
-
-    raise RuntimeError(
-        "LLM failed to produce a valid AnswerModel after 3 attempts"
-    )
+        return result.output
+    except UnexpectedModelBehavior as exc:
+        raise RuntimeError(f"LLM failed to produce a valid answer after 3 attempts: {exc}") from exc
 
 def ask(question: str) -> AnswerModel:
-    load_dotenv()
-
     if not settings.llm_api_key:
         raise RuntimeError("LLM_API_KEY environment variable not set")
 
-    retrieved_sources = get_sources_from_db(args.question)
+    retrieved_sources = get_sources_from_db(question)
 
     retrieved_context = []
     for i, (document, metadata) in enumerate(retrieved_sources, start=1,
@@ -135,7 +94,7 @@ def ask(question: str) -> AnswerModel:
         )
 
     context = "\n\n---\n\n".join(retrieved_context)
-    llm_answer = get_llm_answer(context)
+    llm_answer = get_llm_answer(question, context)
 
     if llm_answer.insufficient_context:
         citations = []
@@ -149,10 +108,15 @@ def ask(question: str) -> AnswerModel:
 
     return AnswerModel(
         answer=llm_answer.answer,
-        citations=citations
+        citations=citations,
+        insufficient_context=llm_answer.insufficient_context,
     )
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("question")
+    args = parser.parse_args()
+
     result = ask(args.question)
 
     print(f"{result.answer}\n")
@@ -160,6 +124,7 @@ def main():
         print(f"Relevant sources:")
         for source in result.citations:
             print(f"{source}")
+    print(f"\ninsufficient_context = {result.insufficient_context}")
     
 
 if __name__ == "__main__":
