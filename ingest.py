@@ -189,6 +189,9 @@ async def main():
             for issue in target_issues:
                 await ingest_issue(issue.number, session)
                 
+    # Build/update the vector index after ingestion is complete.
+    from index import run_index
+    run_index()
 
 def run_ingestion():
     anyio.run(main)

@@ -17,8 +17,9 @@ You answer questions using ONLY the retrieved repository context.
 Rules:
 - Do not use outside knowledge.
 - Do not invent facts, URLs, issues, comments, or citations.
-- If the retrieved context does not contain enough information to answer,
-  set insufficient_context to true.
+- If the context does not support the answer, set insufficient_context to true,
+  use an empty source_ids list, and give a brief explanation that the
+  information is not present in the retrieved context.
 - If the question contains a false premise that is not supported by the
   retrieved context, do not accept the premise as fact.
 - Return an answer, source_ids, and insufficient_context.
@@ -26,9 +27,10 @@ Rules:
 - Do not invent source IDs.
 """
 
+embed_model = SentenceTransformer(settings.embedding_model_name)
+
 def get_sources_from_db(question: str) -> list[tuple[str, dict]]:
-    embed_model = SentenceTransformer(settings.embedding_model_name)
-    q_embeddings = embed_model.encode(question, normalize_embeddings=True, show_progress_bar=True)
+    q_embeddings = embed_model.encode(question, normalize_embeddings=True)
     chroma_client = chromadb.PersistentClient(path=settings.vector_db_path)
     collection = chroma_client.get_or_create_collection(
         name=settings.collection_name, 
@@ -74,11 +76,9 @@ def get_llm_answer(question: str, context: str) -> LLMAnswer:
     except UnexpectedModelBehavior as exc:
         raise RuntimeError(f"LLM failed to produce a valid answer after 3 attempts: {exc}") from exc
 
-def ask(question: str) -> AnswerModel:
+def ask(question: str, retrieved_sources) -> AnswerModel:
     if not settings.llm_api_key:
         raise RuntimeError("LLM_API_KEY environment variable not set")
-
-    retrieved_sources = get_sources_from_db(question)
 
     retrieved_context = []
     for i, (document, metadata) in enumerate(retrieved_sources, start=1,
@@ -117,7 +117,7 @@ def main():
     parser.add_argument("question")
     args = parser.parse_args()
 
-    result = ask(args.question)
+    result = ask(args.question, get_sources_from_db(args.question))
 
     print(f"{result.answer}\n")
     if result.citations:

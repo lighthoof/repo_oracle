@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     github_branch: str
     github_files: list[str]
     
-    #Model and vector store settings
+    #Model settings
     llm_api_key: SecretStr
     llm_model_name: str
     llm_base_url: str
@@ -19,14 +19,21 @@ class Settings(BaseSettings):
     max_tokens: int
     overlap: int
     
-    vector_db_path: str
+    #Vector store settings
+    vector_db_path: Path
     collection_name: str
     space_type: str
+
+    #Returned result limits
     result_limit: int
     
     #Storage paths
     raw_data_dir: Path = Path("data/raw")
     parsed_data_dir: Path = Path("data/parsed")
+
+    #Test case collection path
+    testcase_path: Path
+
 
     model_config = SettingsConfigDict(
         env_file=".env",

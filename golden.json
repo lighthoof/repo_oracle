@@ -1,0 +1,72 @@
+{
+    "test_cases": [
+        {
+            "query":"what is pynetbox for?",
+            "expected_keywords": ["python", "api", "client", "netbox"],
+            "expected_citations": ["https://github.com/netbox-community/pynetbox/blob/main/README.md"],
+            "insufficient_context": false
+        },
+        {
+            "query":"for pynetbox 11.4 how do i run integration tests through podman?",
+            "expected_keywords": [],
+            "expected_citations": [],
+            "insufficient_context": true
+        },
+        {
+            "query":"how do i install netbox?",
+            "expected_keywords": [],
+            "expected_citations": [],
+            "insufficient_context": true
+        },
+        {
+            "query":"how do i treat a parrot in my netbox?",
+            "expected_keywords": [],
+            "expected_citations": [],
+            "insufficient_context": true
+        },
+        {
+            "query":"how pynetbox works with threading?",
+            "expected_keywords": ["threading", "filter", "threadpool"],
+            "expected_citations": [
+                "https://github.com/netbox-community/pynetbox/blob/main/README.md",
+                "https://github.com/netbox-community/pynetbox/issues/191"
+            ],
+            "insufficient_context": false
+        },
+        {
+            "query":"does pynetbox enforce stricter filter policy than netbox?",
+            "expected_keywords": ["no", "filter", "validation", "openapi"],
+            "expected_citations": [
+                "https://github.com/netbox-community/pynetbox/blob/main/README.md",
+                "https://github.com/netbox-community/pynetbox/issues/695"
+            ],
+            "insufficient_context": false
+        },
+        {
+            "query":"my save operation fails if any choice_field is present",
+            "expected_keywords": ["custom", "choice", "save", "fails"],
+            "expected_citations": ["https://github.com/netbox-community/pynetbox/issues/806"],
+            "insufficient_context": false
+        },
+        {
+            "query":"are cable bundles supported in the datamodel?",
+            "expected_keywords": ["cable", "bundle", "supported"],
+            "expected_citations": ["https://github.com/netbox-community/pynetbox/issues/796"],
+            "insufficient_context": false
+        },
+        {
+            "query": "why does saving a custom field cause KeyError value in pynetbox?",
+            "expected_keywords": ["custom field", "KeyError", "value"],
+            "expected_citations": [
+                "https://github.com/netbox-community/pynetbox/issues/497"
+            ],
+            "insufficient_context": false
+        },
+        {
+            "query": "why did a pynetbox change break the Ansible nb_lookup module, and what was proposed to prevent similar breakage?",
+            "expected_keywords": ["nb_lookup", "deprecation", "lifecycle", "Ansible"],
+            "expected_citations": ["https://github.com/netbox-community/pynetbox/issues/531"],
+            "insufficient_context": false
+        }
+    ]
+}

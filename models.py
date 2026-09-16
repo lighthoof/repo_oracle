@@ -58,3 +58,12 @@ class AnswerModel(BaseModel):
     answer: str
     citations: list[HttpUrl]
     insufficient_context: bool
+
+class TestCase(BaseModel):
+    query: str
+    expected_keywords: list[str]
+    expected_citations: list[str]
+    insufficient_context: bool
+
+class GoldenDataset(BaseModel):
+    test_cases: list[TestCase]
