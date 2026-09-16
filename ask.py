@@ -96,6 +96,12 @@ def ask(question: str, retrieved_sources) -> AnswerModel:
     context = "\n\n---\n\n".join(retrieved_context)
     llm_answer = get_llm_answer(question, context)
 
+    for source_id in llm_answer.source_ids:
+        if not 1 <= source_id <= len(retrieved_sources):
+            raise RuntimeError(
+                f"LLM returned invalid source_id: {source_id}"
+            )
+
     if llm_answer.insufficient_context:
         citations = []
     else:
@@ -119,13 +125,7 @@ def main():
 
     result = ask(args.question, get_sources_from_db(args.question))
 
-    print(f"{result.answer}\n")
-    if result.citations:
-        print(f"Relevant sources:")
-        for source in result.citations:
-            print(f"{source}")
-    print(f"\ninsufficient_context = {result.insufficient_context}")
-    
+    print(result.model_dump_json(indent=2))
 
 if __name__ == "__main__":
     main()

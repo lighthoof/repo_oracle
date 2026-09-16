@@ -5,14 +5,14 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from config import settings
-from models import Issue, IssueListPage, RepoFile
+from models import Issue, IssueListPage, RepoFile, Comment
 
 
 def setup_directories():
-    """Ensure both raw and parsed storage layer folders exist."""
     (settings.raw_data_dir / "files").mkdir(parents=True, exist_ok=True)
-    (settings.parsed_data_dir / "files").mkdir(parents=True, exist_ok=True)
     (settings.raw_data_dir / "issues").mkdir(parents=True, exist_ok=True)
+    (settings.raw_data_dir / "comments").mkdir(parents=True, exist_ok=True)
+    (settings.parsed_data_dir / "files").mkdir(parents=True, exist_ok=True)
     (settings.parsed_data_dir / "issues").mkdir(parents=True, exist_ok=True)
 
 async def get_all_issue_summaries(session: ClientSession):
@@ -52,10 +52,11 @@ def is_file_cached(slug: str) -> bool:
 
 
 def is_issue_cached(issue_num: int) -> bool:
-    raw_exists = (settings.raw_data_dir / "issues" / f"issue_{issue_num}.json").exists()
+    raw_issue_exists = (settings.raw_data_dir / "issues" / f"issue_{issue_num}.json").exists()
+    raw_comments_exists = (settings.raw_data_dir / "comments" / f"issue_{issue_num}_comments.json").exists()
     parsed_exists = (settings.parsed_data_dir / "issues" / f"issue_{issue_num}.json" ).exists()
 
-    return raw_exists and parsed_exists
+    return raw_issue_exists and raw_comments_exists and parsed_exists
 
 async def ingest_file(file_path: str, session: ClientSession):
     slug = file_path.replace("/", "_").replace(".", "_")
@@ -128,15 +129,21 @@ async def ingest_issue(issue_num: int, session: ClientSession):
     comments_text = "\n".join([c.text for c in comments_res.content if c.type == "text"])
     raw_comments = json.loads(comments_text) if comments_text.strip() else []
 
-    raw_issue["comments"] = raw_comments
-
     # Save raw API response
     raw_issue_path = settings.raw_data_dir / "issues" / f"issue_{issue_num}.json"
     with open(raw_issue_path, "w", encoding="utf-8") as f:
         json.dump(raw_issue, f, indent=2, default=str)
+    
+    raw_comments_path = settings.raw_data_dir / "comments" / f"issue_{issue_num}_comments.json"
+    with open(raw_comments_path, "w", encoding="utf-8") as f:
+        json.dump(raw_comments, f, indent=2, default=str)
+
+    validated_comments = [Comment.model_validate(comment) for comment in raw_comments]
+    enriched_issue = dict(raw_issue)
+    enriched_issue["comments"] = validated_comments 
 
     # Save validated data
-    validated_issue = Issue.model_validate(raw_issue)
+    validated_issue = Issue.model_validate(enriched_issue)
     parsed_issue_path = settings.parsed_data_dir / "issues" / f"issue_{issue_num}.json"
     with open(parsed_issue_path, "w", encoding="utf-8") as f:
         f.write(validated_issue.model_dump_json(indent=2))

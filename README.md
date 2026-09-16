@@ -118,7 +118,7 @@ Question: what is pynetbox for?
 ...
 
 Retrieval accuracy: 6/7 (85.7%)
-Answer accuracy: 7/10 (70.0%)
+Answer accuracy: 9/10 (90.0%)
 ```
 
 The exact answer accuracy may vary between runs because the assignment uses the `openrouter/free` model. Retrieval and generation are evaluated separately so this distinction is visible.
@@ -131,19 +131,19 @@ Run:
 uv run ask.py "what is pynetbox for?"
 ```
 
-The command prints:
+The command prints a representation of AnswerModel object, that contains:
 
 - the generated answer;
-- relevant source URLs;
+- relevant citations;
 - the `insufficient_context` value.
 
 For a question supported by the repository, the answer should include a repository source URL, for example:
 
 ```text
-Relevant sources:
-https://github.com/netbox-community/pynetbox/blob/main/README.md
-
-insufficient_context = False
+  "citations": [
+    "https://github.com/netbox-community/pynetbox/blob/main/README.md"
+  ],
+  "insufficient_context": false
 ```
 
 For information that is not supported by the retrieved repository context, the model is instructed not to use outside knowledge or invent citations.
@@ -157,7 +157,7 @@ uv run ask.py "how do i install netbox?"
 This information is not contained in the indexed corpus, so the expected behavior is:
 
 ```text
-insufficient_context = True
+"insufficient_context": true
 ```
 
 It should be treated as insufficient context rather than answered using outside knowledge.
